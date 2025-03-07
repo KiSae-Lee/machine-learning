@@ -61,7 +61,7 @@ def update(frame):
 
 # 3D 플롯 설정
 fig = plt.figure()
-ax = Axes3D(fig.add_subplot(111, projection="3d"))
+ax = fig.add_subplot(111, projection="3d")
 
 ani = FuncAnimation(fig, update, frames=int(total_time / time_step), interval=50)
 plt.show()
