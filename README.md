@@ -348,3 +348,486 @@ h(x) = \frac{1}{1 + exp(-x)}
 $$
 
 식에서 $exp(-x)$ 은 $e^{-x}$ 를 뜻함. $e$는 자연상수로 2.7182… 값을 갖는 실수.
+
+퍼셉트론과 신경망의 주된 차이는 활성화 함수 뿐.
+
+### 계단 함수 구현
+
+단순한 계단 함수:
+
+```python
+import numpy as np
+
+def step_function(x):  # Only takes a number
+    if x > 0:
+        return 1
+    else:
+        return
+
+def step_function_array(x):  # It can takes an array
+    y = x > 0  # It will compare each element of the array with 0
+    return y.astype(np.int_)  # It will convert the boolean array to int array
+
+print(step_function(-1))  # 0
+print(step_function_array(np.array([-1.0, 2.0, 3.0])))  # [0 1 1]
+```
+
+`astype(dtype)` 함수: 대상 배열 중 모든 요소를 입력한 데이터 타입으로 변환한다.
+
+### 시그모이드 함수 구현
+
+```python
+import numpy as np
+import matplotlib.pylab as plt
+
+def step_function_array(x):  # It can takes an array
+    y = x > 0  # It will compare each element of the array with 0
+    return y.astype(np.int_)  # It will convert the boolean array to int array
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+x1 = np.arange(-5.0, 5.0, 0)
+y1 = step_function_array(x1)
+
+x2 = np.arange(-5.0, 5.0, 0.1)
+y2 = sigmoid(x2)
+
+plt.plot(x1, y1, linestyle="--", label="step")
+plt.plot(x2, y2, label="sigmoid")
+plt.xlabel("x")
+plt.ylabel("y")
+plt.legend()
+plt.ylim(-0.1, 1.1)
+plt.show()
+```
+
+계단 함수와 시그모이드 함수 모두 출력은 0~1 사이라는 것은 동일하다.
+
+### 비선형 함수
+
+계단 함수와 시그모이드 함수 모두 비선형 함수이다. 선형함수는 무언가를 입력했을 때 출력이 입력의 상수배만큼 변하는 함수이다. $f(x) = ax + b$ 가 대표적인 선형함수이며, 이때 $a$ 와 $b$ 는 상수다.
+
+<aside>
+
+신경망에서 비선형 함수를 사용하는 이유:
+
+선형함수를 활성화 함수로 채택한 경우의 예: 
+
+- 선형함수: $h(x)=cx$
+- 3층 네트워크를 위 선형함수로 대입한 결과: $y(x)=h(h(h(x)))$
+- 변환 후: $y(x)=c*c*c*x$
+- 이것은 $y(x)=ax$ 와  본질적으로 같음($a=c^3$이라고 한다면).
+- 즉 은닉층이 없는 네트워크
+</aside>
+
+### ReLU 함수
+
+최근에는 ReLU(Rectified Linear Unit, 렐루) 함수를 주로 이용.
+
+```python
+import numpy as np
+
+def relu(x):
+    return np.maximum(0, x)
+    
+x1 = np.arange(-5.0, 5.0, 0.1)
+y1 = step_function_array(x1)
+
+x2 = np.arange(-5.0, 5.0, 0.1)
+y2 = sigmoid(x2)
+
+x3 = np.arange(-5.0, 5.0, 0.1)
+y3 = relu(x3)
+
+plt.plot(x1, y1, linestyle="--", label="step")
+plt.plot(x2, y2, label="sigmoid")
+plt.plot(x3, y3, label="ReLU")
+plt.xlabel("x")
+plt.ylabel("y")
+plt.legend()
+plt.show()
+```
+
+$$
+h(x) = \begin{cases} 0 (x<=0) \\ x (x > 0) \end{cases}
+$$
+
+### 다차원 배열
+
+차원 수 및 다차원 배열의 모양 확인하기
+
+```python
+import numpy as np
+
+A = np.array([[1, 2, 3, 4]])
+print(np.ndim(A))  # 1. Returns the number of dimensions of the array
+print(A.shape)  # (4,). Returns the shape of the array
+
+B = np.array([[1, 2], [3, 4], [5, 6]])
+print(np.ndim(B))  # 2
+print(B.shape)  # (3, 2)
+```
+
+행렬 곱 계산하기 (`np.dot()`)
+
+- `np.dot(A, B)` 와 `np.dot(B, A)` 는 다른 값이 될 수 있다. (행렬곱 공식확인)
+- 행렬 곱은 행렬 A 의 1 번째 차원의 원소 수와 행렬 B 의 0번째 차원의 원소 수가 같아야 함.
+- 즉, 행렬 A 의 형상이 $(row_A, column_A)$ , 행렬 B 의 형상이 $(row_B, column_B)$ 일 때, $column_A = row_B$ 가 만족되어야 한다.
+- 행렬 곱의 결과 C 의 형상은 $(row_A, column_B)$ 가 된다.
+
+```python
+A = np.array([[1, 2, 3], [4, 5, 6]])
+B = np.array([[1, 2], [3, 4], [5, 6]])
+C = np.dot(A, B)
+print(C)  # [[22 28] [49 64]]
+```
+
+신경망에서의 행렬 곱
+
+```mermaid
+graph LR
+  x1((x_1)) --1--> y1
+  x2((x_2)) --2--> y1((y_1))
+  x1((x_1)) --3--> y2
+  x2((x_2)) --4--> y2((y_2))
+  x1((x_1)) --5--> y3
+  x2((x_2)) --6--> y3((y_3))
+
+```
+
+위와 같은 신경망 형태에서, X 는 (2,), W 는(2,3), Y는(,3) 형상을 갖는다. 편향과 활성화 함수를 생략하고 가중치만 고려했을 때, Y 값을 계산하는 방법은 아래와 같다.
+
+```python
+# In neural network
+X = np.array([1, 2])
+W = np.array([[1, 3, 5], [2, 4, 6]])
+Y = np.dot(X, W)
+print(Y)  # [5 11 17]
+```
+
+즉 행렬곱을 통해 Y 는 한 번의 연산으로 계산가능하다.
+
+## 신경망 구현하기
+
+```mermaid
+graph LR
+  x2((x_2)) --w_12--> a1((a_1))
+
+```
+
+$$
+w^{(1)}_{12}
+$$
+
+- $(1)$: 1 층에 가중치라는 의미
+- $1$: 다음 층 뉴런의 번호 (다음 층 1 번째 뉴런)
+- $2$: 앞 층 뉴런의 번호 (앞 층 2 번째 뉴런)
+
+편향을 포함했을 때의 관계도는 아래와 같음($a_2$, $a_3$ 는 귀찮아서 그리지 않음)
+
+```mermaid
+graph LR
+  1((1)) --b_1--> a((a_1))
+  x1(($$x_1$$)) --w_11--> a
+  x2(($$x_2$$)) --w_12--> a
+  
+  style 1 fill:#aaaa
+
+```
+
+$a^{(1)}_{1}$의 값을 계산하는 공식:
+
+$$
+a^{(1)}_{1} = w^{(1)}_{11}x_1 + w^{(1)}_{12}x2 + b^{(1)}_{1}
+$$
+
+행렬 곱으로 전환 후,
+
+$$
+A^{(1)} = XW^{(1)} + B(1)
+$$
+
+이때, 각 행렬은 아래와 같음
+
+$$
+A^{(1)} = (a^{(1)}_{1}, a^{(1)}_{2}, a^{(1)}_{3}), X = (x_1, x_2), B^{(1)} = (b^{(1)}_{1}, b^{(1)}_{2}, b^{(1)}_{3})
+$$
+
+$$
+W^{(1)} = \begin{pmatrix} w^{(1)}_{11} & w^{(1)}_{21} & w^{(1)}_{31}\\ w^{(1)}_{12} & w^{(1)}_{22} & w^{(1)}_{32}\end{pmatrix}
+$$
+
+이것을 절차지향적으로 구현한 결과는 아래과 같음
+
+```python
+import numpy as np
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+# this function is not doing anything
+# in this specific case
+def identity_function(x):
+    return x
+
+# input layer to level 1
+X = np.array([1.0, 0.5])
+W1 = np.array([[0.1, 0.3, 0.5], [0.2, 0.4, 0.6]])
+B1 = np.array([0.1, 0.2, 0.3])
+
+A1 = np.dot(X, W1) + B1
+Z1 = sigmoid(A1)
+print(Z1)  # [0.57444252 0.66818777 0.75026011]
+
+# level 1 to level 2
+W2 = np.array([[0.1, 0.4], [0.2, 0.5], [0.3, 0.6]])
+B2 = np.array([0.1, 0.2])
+
+A2 = np.dot(Z1, W2) + B2
+Z2 = sigmoid(A2)
+print(Z2)  # [0.62624937 0.7710107]
+
+# level 2 to output layer
+W3 = np.array([[0.1, 0.3], [0.2, 0.4]])
+B3 = np.array([0.1, 0.2])
+
+A3 = np.dot(Z2, W3) + B3
+Y = identity_function(A3)
+print(Y)  # [0.31682708 0.69627909]
+```
+
+위 구현을 정리하면 아래와 같음
+
+```python
+import numpy as np
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+# this function is not doing anything
+# in this specific case
+def identity_function(x):
+    return x
+
+def init_network():  # return a network with 2 inputs
+    network = {}
+    network["W1"] = np.array([[0.1, 0.3, 0.5], [0.2, 0.4, 0.6]])
+    network["b1"] = np.array([0.1, 0.2, 0.3])
+    network["W2"] = np.array([[0.1, 0.4], [0.2, 0.5], [0.3, 0.6]])
+    network["b2"] = np.array([0.1, 0.2])
+    network["W3"] = np.array([[0.1, 0.3], [0.2, 0.4]])
+    network["b3"] = np.array([0.1, 0.2])
+
+    return network
+
+def forward(network, x):
+    W1, W2, W3 = network["W1"], network["W2"], network["W3"]
+    b1, b2, b3 = network["b1"], network["b2"], network["b3"]
+
+    a1 = np.dot(x, W1) + b1
+    z1 = sigmoid(a1)
+    a2 = np.dot(z1, W2) + b2
+    z2 = sigmoid(a2)
+    a3 = np.dot(z2, W3) + b3
+    y = identity_function(a3)
+
+    return y
+
+network = init_network()
+x = np.array([1.0, 0.5])
+y = forward(network, x)
+print(y)  # [0.31682708 0.69627909]
+```
+
+## 출력층 설계하기
+
+기계학습 문제는 **분류**(classification)와 **회귀**(regression)로 나뉨. 사진 속 인물의 성별을 분류하는 문제는 ‘분류’, 사진 속 인물의 몸무게를 예측하는 문제는 ‘회귀’.
+
+일반적으로 ‘회귀’에는 **항등 함수**(identify function)을 사용. 항등 함수는 입력을 그대로 출력함. ‘항등’은 입력과 출력이 항상 같다는 의미.
+
+‘분류’에는 **소프트맥스 함수**(softmax function) 을 사용. 식은 다음과 같음.
+
+$$
+y_k=\frac{exp(a_k)}{\sum_{i=1}^n exp(a_i)}
+$$
+
+소프트맥스 함수의 구현은 다음과 같음.
+
+```python
+import numpy as np
+
+def softmax(a):  # this will overflow
+    exp_a = np.exp(a)
+    sum_exp_a = np.sum(exp_a)
+    y = exp_a / sum_exp_a
+    return y
+```
+
+다만, 소프트맥스 함수는 지수함수를 사용하여, 엄청 큰 값을 리턴할 수 있음. 또한 이러한 큰 값끼리 나눗셈을 할 경우 결과 수치가 불안정해짐. 이 때, 소프트맥스 함수를 아래와 같이 개선하여 구현하면 오버플로 문제를 해결할 수 있음.
+
+$$
+y_k=\frac{exp(a_k-C')}{\sum_{i=1}^n exp(a_i-C')}
+$$
+
+그 구현은 아래와 같음.
+
+```python
+import numpy as np
+
+def softmax_modified(a):  # this will not overflow
+    c = np.max(a)
+    exp_a = np.exp(a - c)
+    sum_exp_a = np.sum(exp_a)
+    y = exp_a / sum_exp_a
+    return y
+```
+
+- 소프트맥스 함수의 성질: 출력은 0.0~1.0 사이 실수이며, 출력의 총 합은 1. 즉, 소프트맥스 함수의 출력을 ‘확률’로 해석할 수 있음.
+- ‘분류’ 문제에서, 은닉층의 마지막 층 원소의 대소 관계와, 소프트맥스 함수를 통해 계산된 출력층 원소의 대소 관계는 동일함으로 굳이 소프트맥스 함수를 통해 추가 계산하지 않음.
+
+## 손글씨 숫자 인식
+
+학습과정은 생략하고, 추론과정만 구현. 이 추론 과정을 신경망의 **순전파**(forward propagation) 이라고 함.
+
+<aside>
+
+MNIST 데이터 가져오기:
+
+- tensorflow 를 통한 MNIST 가져오기 (딱봐도 이게 좋다)
+
+```python
+# pip install tensorflow
+# Better! load the MNIST dataset using tensorflow
+import keras
+
+import keras
+import matplotlib.pyplot as plt
+
+Mnist = keras.datasets.mnist
+(x_train, t_train), (x_test, t_test) = Mnist.load_data()
+
+print(x_train.shape, t_train.shape)
+print(x_test.shape, t_test.shape)
+
+for i in range(9):
+    plt.subplot(3, 3, i + 1)
+    plt.tight_layout()
+    plt.imshow(x_train[i].reshape(28, 28), cmap="gray", interpolation="none")
+    plt.title("digit: {}".format(t_train[i]))
+    plt.xticks([])
+    plt.yticks([])
+
+plt.show()
+```
+
+- pytorch 를 통한 MNIST 가져오기
+
+```python
+# pip install torch
+# pip install torchvision
+from torchvision import datasets
+from torchvision.transforms import ToTensor
+from torch.utils.data import DataLoader
+
+# Load the MNIST dataset using torchvision.datasets
+BATCH_SIZE = 32
+train_set = datasets.MNIST(
+    root="./mnist", train=True, transform=ToTensor(), download=True
+)
+
+test_set = datasets.MNIST(
+    root="./mnist", train=False, transform=ToTensor(), download=True
+)
+
+print(len(train_set))
+
+train_loader = DataLoader(dataset=train_set, batch_size=BATCH_SIZE, shuffle=True)
+test_loader = DataLoader(dataset=test_set, batch_size=BATCH_SIZE, shuffle=False)
+
+for x_train, t_train in train_loader:
+    for i in range(9):
+        plt.subplot(3, 3, i + 1)
+        plt.tight_layout()
+        plt.imshow(x_train[i].reshape(28, 28), cmap="gray", interpolation="none")
+        plt.title("digit: {}".format(t_train[i]))
+        plt.xticks([])
+        plt.yticks([])
+
+    plt.show()
+    break
+```
+
+</aside>
+
+### 신경망 추론 처리
+
+```python
+import keras
+import numpy as np
+import pickle
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+def softmax(a):
+    c = np.max(a)
+    exp_a = np.exp(a - c)
+    sum_exp_a = np.sum(exp_a)
+    y = exp_a / sum_exp_a
+    return y
+
+def get_data():
+    Mnist = keras.datasets.mnist
+    (x_train, t_train), (x_test, t_test) = Mnist.load_data()
+    # Normalize the image data
+    return x_test.reshape([-1, 28 * 28]) / 255, t_test
+
+def init_network():
+    with open("assets/sample_weight.pkl", "rb") as f:
+        network = pickle.load(f)
+
+    return network
+
+def predict(network, x):
+    W1, W2, W3 = network["W1"], network["W2"], network["W3"]
+    b1, b2, b3 = network["b1"], network["b2"], network["b3"]
+
+    a1 = np.dot(x, W1) + b1
+    z1 = sigmoid(a1)
+    a2 = np.dot(z1, W2) + b2
+    z2 = sigmoid(a2)
+    a3 = np.dot(z2, W3) + b3
+    y = softmax(a3)
+
+    return y
+
+x, t = get_data()
+network = init_network()
+
+accuracy_cnt = 0
+for i in range(len(x)):
+    y = predict(network, x[i].flatten())
+    p = np.argmax(y)
+    if p == t[i]:
+        accuracy_cnt += 1
+
+print("Accuracy: " + str(float(accuracy_cnt) / len(x)))
+```
+
+- 정확도: 0.9352
+- 여기서 0~255 범위인 픽셀의 값을 0.0~1.0 범위로 변환했다(안하면 시그모이드 함수에서 오버플로가 난다). 이러한 변환을 **정규화**(normalization)라고 한다.
+- 이렇게 신경망의 입력 데이터 특정 변환을 가하는 것을 **전처리**(pre-processing)라 한다. ‘정규화’는 ‘전처리’ 작업 중 하나이다.
+
+### 배치처리(묶음처리)
+
+```python
+batch_size = 100
+for i in range(0, len(x), batch_size):
+    x_batch = x[i : i + batch_size]
+    y_batch = predict(network, x_batch)
+    p = np.argmax(y_batch, axis=1)
+    accuracy_cnt += np.sum(p == t[i : i + batch_size])
+
+print("Accuracy: " + str(float(accuracy_cnt) / len(x)))
+```
