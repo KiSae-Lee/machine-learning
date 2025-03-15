@@ -831,3 +831,1121 @@ for i in range(0, len(x), batch_size):
 
 print("Accuracy: " + str(float(accuracy_cnt) / len(x)))
 ```
+
+# 신경망 학습
+
+선형 분리 가능 문제라면 데이터로부터 자동으로 학습할 수 있지만, 비선형 분리 문제는 자동으로 학습할 수 없다. 선형 분리 가능 문제는 유한 번의 학습을 통해 풀 수 있다는 사실이 **퍼셉트론 수렴 정리**(perceptron convergence theorem)으로 증명 됨.
+
+## 데이터 주도 학습
+
+- 전통적인 방식으로서, **사람이 데이터를 확인하고 알고리즘을 개발**하여 결과를 도출한다.
+- **기계학습** 기술 중:
+    - 이미지에서 ‘**특징**(feature)’을 추출하고 그 특징의 패턴을 학습하는 방법
+        - 이미지 특징은 보통 벡터로 기술한다.
+        - CV 분야에서 SIFT, SURF, HOG 등 특징을 많이 사용한다.
+        - 변환된 벡터를 가지고 지도 학습 방식의 대표 분류 기법인 SVM, KNN 등을 통해 학습할 수 있다.
+- **신경망** 방식은 전 과정에서 사람이 개입하지 않는다.
+- **딥러닝**을 **종단간 기계학습**(end-to-end machine learning)이라고도 한다.
+
+회색 블록은 사람이 개입하지 않음을 뜻함
+
+```mermaid
+graph LR
+  1[데이터] --> 2[사람이 생각한 알고리즘]
+  2 --> 3[결과]
+  4[데이터] --> 5["사람이 생각한 특징(SIFT, HOG 등)"]
+  5 --> 6["기계학습(SVN, KNN 등)"]
+  6 --> 7[결과]
+  8[데이터] --> 9["신경망(딥러닝)"]
+  9 --> 10[결과]
+  
+  style 6 fill:#aaaa
+  style 9 fill:#aaaa
+  
+```
+
+기계학습 문제에서의 데이터
+
+- **훈련 데이터**(trainning data)와 **시험 데이터**(test data)가 존재한다.
+- 시험 데이터는 **범용 능력**을 제대로 평가하기 위한 데이터이다.
+- 하나의 데이터셋에만 지나치게 최적화된 상태를 **오버피팅**(overfitting)이라고 한다.
+
+## 손실함수
+
+**손실함수**(loss function)는 신경망 성능의 ‘나쁨’을 나타내는 지표로, 훈련 데이터를 얼마나 잘 처리하지 ‘못’하느냐를 나타냄. 일반적으로는 오차제곱합과 교차 엔트로피 오차를 사용.
+
+**오차제곱합**(sum of squares for error, SSE):
+
+$$
+E=\frac{1}{2}\sum_{k} (y_k-t_k)^2
+$$
+
+- $y_k$: 신경망의 출력
+- $t_k$: 정답 레이블
+- $k$: 데이터의 차원 수
+
+예시(한 원소만 1로 하고, 그 외는 0으로 나타내는 표기법을 **원-핫 인코딩**(one-hot encoding)이라 함):
+
+```bash
+>>> y = [0.1, 0.05, 0.6, 0.0, 0.05, 0.1, 0.0, 0.1, 0.0, 0.0] # 신경망의 출력. 소프트맥스 함수 활용.
+>>> t = [0, 0, 1, 0, 0, 0, 0, 0, 0, 0] # 정답 레이블
+```
+
+구현:
+
+```python
+import numpy as np
+
+def sum_squares_error(y, t):
+    return 0.5 * np.sum((y - t) ** 2)
+
+y = [
+    0.1,
+    0.05,
+    0.6,
+    0.0,
+    0.05,
+    0.1,
+    0.0,
+    0.1,
+    0.0,
+    0.0,
+]  # output of the neural network. Estimated most likely '2'. 
+t = [0, 0, 1, 0, 0, 0, 0, 0, 0, 0]  # answer label
+
+print(sum_squares_error(np.array(y), np.array(t)))  # 0.09750000000000003
+
+```
+
+**교차 엔트로피 오차**(cross entropy error, CEE)
+
+$$
+E=-\sum_{k}t_k\log_e{y_k}
+$$
+
+구현:
+
+```python
+import numpy as np
+
+def cross_entropy_error(y, t):
+    delta = 1e-7
+    return -np.sum(t * np.log(y + delta))
+
+y = [
+    0.1,
+    0.05,
+    0.6,
+    0.0,
+    0.05,
+    0.1,
+    0.0,
+    0.1,
+    0.0,
+    0.0,
+]  # output of the neural network
+t = [0, 0, 1, 0, 0, 0, 0, 0, 0, 0]  # answer label
+
+print(cross_entropy_error(np.array(y), np.array(t)))  # 0.510825457099338
+```
+
+모든 훈련데이터를 대상으로 손실 함수 값을 구하기(**미니배치**(mini-batch)):
+
+- 일반적으로, 모든 데이터를 대상으로 손실 함수의 합을 구하는 것은 많은 시간이 소요된다. 고로 데이터 일부를 추려 전체의 ‘근사치’로 이용한다. 신경망 학습에서도 훈련 데이터로부터 일부만 골라 학습을 수행. 이 일부를 **미니배치**라고 한다.
+- 교차 엔트로피 오차를 활용한 배치 → ‘평균 손실 함수’를 구하는 것
+
+$$
+E=-\frac{1}{N}\sum{n}\sum_{k}t_{nk}\log_e{y_{nk}}
+$$
+
+- $N$: 총 데이터 수
+- $t_{nk}$: $n$번째 데이터의 $k$번째 값
+
+<aside>
+
+신경망을 학습할 떄 정확도를 지표로 삼아서는 안 된다. 정확도를 지표로 하면 매개변수의 미분이 대부분의 장소에서 0이 되기 때문이다.
+
+즉, 정확도를 지표로 한다면, 매개변수 조정을 통해 정확도가 개선이 되지 않는 상황이나, 개선될지라도 정확도가 연속적인 변화를 띄지 않는 경우가 존재한다. 
+
+</aside>
+
+## 수치 미분(numerical differentiation)
+
+- 미분은 ‘특정 순간’의 변화량을 뜻한다.
+- 수치 미분은 아죽 작은 차분으로 미분하는 것.
+- 수식을 전개해 미분하는 것은 ‘해석적(analytic)’이라는 말을 사용.
+
+$$
+\frac{df(x)}{dx} = \lim\nolimits_{h \to 0}{\frac{f(x+h) - f(x)}{h}}
+$$
+
+수치 미분은 컴퓨터에서 구현 시 아래와 같은 이슈가 있을 수 있다.
+
+- **반올림 오차**(rounding error): $1e-50$을 float32형으로 나타내면 0.0이 되어, 올바로 표현 불가. $1e-4$정도에서 좋은 결과를 얻을 수 있음.
+- 근사로 구한 접선이기 때문에 엄밀한 일치가 어려움.
+
+오차를 줄이는 방법:
+
+- $(x+h)$와 $(x-h)$일 때의 함수$f$ 의 차분을 계산하는 방법 → **중심 차분** 혹은 **중앙 차분**
+
+구현:
+
+```python
+def numerical_diff(f, x):
+	h = 1e-4 # 0.0001
+	return (f(x+h) - f(x-h)) / (2*h)
+```
+
+수치 미분 예시:
+
+$$
+y = 0.01x^2+0.1x
+$$
+
+수치미분 구현:
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+def function_1(x):
+    return 0.01 * x**2 + 0.1 * x
+
+def numerical_diff(f, x):
+    h = 1e-4
+    return (f(x + h) - f(x - h)) / (2 * h)
+
+def tangent_line(f, x):
+    d = numerical_diff(f, x)
+    y = f(x) - d * x
+    return lambda t: d * t + y
+
+x = np.arange(0.0, 20.0, 0.1)
+y = function_1(x)
+
+plt.xlabel("x")
+plt.ylabel("f(x)")
+plt.plot(x, y)
+
+plt.scatter(5, function_1(5))
+
+tf = tangent_line(function_1, 5)
+y2 = tf(x)
+plt.plot(x, y2)
+
+plt.show()
+```
+
+## 편미분(partial differentiation)
+
+예시:
+
+$$
+f(x_0, x_1) = x_0^2+x_1^2
+$$
+
+**기울기**(gradient, 편미분을 벡터로 정리한 것) 구하기: 
+
+$$
+(\frac{\partial f}{\partial x_0}, \frac{\partial f}{\partial x_1})
+$$
+
+구현(이해하는데 난이도 있음):
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+def numerical_gradient(f, x):
+    h = 1e-4
+    grad = np.zeros_like(x)  # generate array with same shape as x
+
+    for idx in range(x.size):
+        tmp_val = x[idx]
+        # f(x+h)
+        x[idx] = tmp_val + h
+        fxh1 = f(x)
+
+        # f(x-h)
+        x[idx] = tmp_val - h
+        fxh2 = f(x)
+
+        grad[idx] = (fxh1 - fxh2) / (2 * h)
+        x[idx] = tmp_val  # restore value
+
+    return grad
+
+# input is 1D array with 2 elements
+def function_2(x):
+    # return x[0] ** 2 + x[1] ** 2
+    return np.sum(x**2)
+
+x = np.linspace(-3, 3, 25)
+y = np.linspace(-3, 3, 25)
+X, Y = np.meshgrid(x, y)
+
+Z = np.array(
+    [
+        [function_2(np.array([xi, yi])) for xi, yi in zip(row_x, row_y)]
+        for row_x, row_y in zip(X, Y)
+    ]
+)
+
+grad = np.array(
+    [
+        [
+            numerical_gradient(function_2, np.array([xi, yi]))
+            for xi, yi in zip(row_x, row_y)
+        ]
+        for row_x, row_y in zip(X, Y)
+    ]
+)
+
+print(grad.shape)
+
+# Extract gradient components
+U = grad[:, :, 0]  # Gradient in x direction
+V = grad[:, :, 1]  # Gradient in y direction
+
+print(U.shape, V.shape)
+print(U)
+
+fig = plt.figure()
+ax = fig.add_subplot(111, projection="3d")
+ax.plot_surface(X, Y, Z, cmap="viridis")
+
+plt.show()
+
+fig = plt.figure()
+# Quiver graph
+plt.quiver(X, Y, U, V)
+
+plt.show()
+```
+
+## 경사법(경사 하강법)
+
+매개변수 공간이 광대하여 어디가 최솟값이 되는 곳인지를 짐작하기 어려움. 이런 상황에서 기울기를 이용해 함수의 최솟값을 찾으려하는 것이 **경사법**(gradient method).
+
+- 함수의 극솟값, 최솟값, 또 **안장점**(addle point)이 되는 장소에서는 기울기가 0
+- 안장점은 어느 방향에서 보면 극댓값이고 다른 방향에서 보면 극솟값이 되는 점
+- 경사법은 기울기가 0인 장소를 찾지만 그것이 반드시 최솟값이라고 할 수 없음
+- 복잡하고 찌그러진 모양의 함수라면 평평한 곳으로 파고들면서 **고원**(plateau, 플래토)이라 하는, 학습이 진행되지 않는 정체기에 빠질 수 있음
+
+경사법의 수식 표현:
+
+$$
+x_0 = x_0 - \eta\frac{\partial f}{\partial x_0}
+$$
+
+$$
+x_1 = x_1 - \eta\frac{\partial f}{\partial x_1}
+$$
+
+- $\eta$ 기호(eta, 에타)는 갱신하는 양을 나타 냄.
+- 이를 신경망 학습에서는 **학습률**(learning rate)이라고 함. → 즉 매개변수 값을 얼마나 갱신하느냐를 정하는 것
+- 학습률 값은 특정 값으로 정해두어야 함. 일반적으로 너무 크거나 작으면 ‘좋은 장소’를 찾을 수 없음.
+- 학습률 값을 변경하면서 올바르게 학습하고 있는지를 확인
+
+구현:
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+def function_2(x):
+    # return x[0] ** 2 + x[1] ** 2
+    return np.sum(x**2)
+
+# Consider add type hints for numpy arrays
+# reference: https://stackoverflow.com/questions/71109838/numpy-typing-with-specific-shape-and-datatype
+def numerical_gradient(f, x):
+    h = 1e-4
+    grad = np.zeros_like(x)
+
+    for idx in range(x.size):
+        tmp_val = x[idx]
+
+        x[idx] = tmp_val + h
+        fxh1 = f(x)
+
+        x[idx] = tmp_val - h
+        fxh2 = f(x)
+
+        grad[idx] = (fxh1 - fxh2) / (2 * h)
+        x[idx] = tmp_val
+
+    return grad
+
+def gradient_descent(f, init_x, lr=0.01, step_num=100):
+    """
+    init_x: initial value. 1D array.
+    """
+    x = init_x
+
+    for i in range(step_num):
+        grad = numerical_gradient(f, x)
+        x -= lr * grad
+
+    return x
+
+def gradient_descent_recording(f, init_x, lr=0.01, step_num=100):
+    """
+    init_x: initial value. 1D array.
+    """
+    record = []
+    x = init_x
+
+    for i in range(step_num):
+        grad = numerical_gradient(f, x)
+        x -= lr * grad
+        record.append(x.copy())
+
+    return np.array(record)
+
+init_x = np.array([-3.0, 4.0])
+record = gradient_descent_recording(function_2, init_x, lr=0.1, step_num=100)
+
+fig = plt.figure()
+plt.scatter(record[:, 0], record[:, 1])
+plt.xlim(-3, 3)
+plt.ylim(-4, 4)
+plt.xlabel("X0")
+plt.ylabel("X1")
+plt.show()
+```
+
+학습률 같은 매개변수를 하이퍼파라미터(hyper parameter)라고 함.
+
+- 직접 설정. 여러 후보 값 중에서 시험을 통해 가장 잘 학습하는 값을 찾아야 함
+
+가중치, 편향 같은 신경망의 매개변수와는 성질이 다름.
+
+- 가중치, 편향 → 훈련 데이터와 학습 알고리즘에 의해서 ‘자동’ 획득
+
+## 학습 알고리즘 구현
+
+<aside>
+
+확률적 경사 하강법(stochastic gradient descent, SGD) → 미니배치를 무작위로 선정하기 때문
+
+전제:
+
+- 신경망에 적응 가능한 가중치와 편향이 있음.
+
+1 단계 - 미니배치:
+
+- 훈련 데이터 중 일부를 무작위로 가져 옴.
+
+2 단계 - 기울기 산출:
+
+- 미니배치의 손실 함수 값을 줄이기 위해 각 가중치 매개변수의 기울기를 구함
+
+3 단계 - 매개변수 갱신:
+
+- 가중치 매개변수를 기울기 방향으로 아주 조금 갱신
+
+4 단계 - 반복:
+
+- 1~3단계를 반복
+</aside>
+
+구현:
+
+```python
+from matplotlib import pyplot as plt
+import numpy as np
+import keras
+from keras import utils
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+def softmax(a):
+    c = np.max(a)
+    exp_a = np.exp(a - c)
+    sum_exp_a = np.sum(exp_a)
+    y = exp_a / sum_exp_a
+    return y
+
+def cross_entropy_error(y, t):
+    delta = 1e-7
+    return -np.sum(t * np.log(y + delta))
+
+def numerical_gradient(f, x):
+    h = 1e-4
+    grad = np.zeros_like(x)
+
+    # TODO: Need to test it with a simple function
+    it = np.nditer(x, flags=["multi_index"], op_flags=["readwrite"])
+    while not it.finished:
+        idx = it.multi_index
+        tmp_val = x[idx]
+
+        x[idx] = float(tmp_val) + h
+        fxh1 = f(x)
+
+        x[idx] = tmp_val - h
+        fxh2 = f(x)
+
+        grad[idx] = (fxh1 - fxh2) / (2 * h)
+
+        x[idx] = tmp_val  # restore value
+        it.iternext()
+
+    return grad
+
+def get_data():
+    Mnist = keras.datasets.mnist
+    (x_train, t_train), (x_test, t_test) = Mnist.load_data()
+    # Normalize and one-hot the image data
+    return (
+        x_train.reshape([-1, 28 * 28]) / 255,
+        utils.to_categorical(t_train),
+        x_test.reshape([-1, 28 * 28]) / 255,
+        utils.to_categorical(t_test),
+    )
+
+class two_layer_net:
+    def __init__(self, input_size, hidden_size, output_size, weight_init_std=0.01):
+        self.params = {}
+        self.params["W1"] = weight_init_std * np.random.randn(input_size, hidden_size)
+        self.params["b1"] = np.zeros(hidden_size)
+        self.params["W2"] = weight_init_std * np.random.randn(hidden_size, output_size)
+        self.params["b2"] = np.zeros(output_size)
+
+    def predict(self, x):
+        W1, W2 = self.params["W1"], self.params["W2"]
+        b1, b2 = self.params["b1"], self.params["b2"]
+
+        a1 = np.dot(x, W1) + b1
+        z1 = sigmoid(a1)
+        a2 = np.dot(z1, W2) + b2
+        y = softmax(a2)
+
+        return y
+
+    def loss(self, x, t):
+        y = self.predict(x)
+        return cross_entropy_error(y, t)
+
+    def accuracy(self, x, t):
+        y = self.predict(x)
+        y = np.argmax(y, axis=1)
+        t = np.argmax(t, axis=1)
+
+        accuracy = np.sum(y == t) / float(x.shape[0])
+        return accuracy
+
+    def numerical_gradient(self, x, t):
+        loss_W = lambda W: self.loss(x, t)
+
+        grads = {}
+        grads["W1"] = numerical_gradient(loss_W, self.params["W1"])
+        grads["b1"] = numerical_gradient(loss_W, self.params["b1"])
+        grads["W2"] = numerical_gradient(loss_W, self.params["W2"])
+        grads["b2"] = numerical_gradient(loss_W, self.params["b2"])
+
+        return grads
+
+train_loss_list = []
+train_acc_list = []
+test_acc_list = []
+
+iters_num = 10000
+batch_size = 100
+learning_rate = 0.1
+
+x_train, t_train, x_test, t_test = get_data()
+train_size = x_train.shape[0]
+
+iter_per_epoch = max(train_size / batch_size, 1)
+
+net = two_layer_net(input_size=784, hidden_size=50, output_size=10)
+
+for i in range(iters_num):
+    batch_mask = np.random.choice(train_size, batch_size)
+    x_batch = x_train[batch_mask]
+    t_batch = t_train[batch_mask]
+
+    grad = net.numerical_gradient(x_batch, t_batch)
+
+    for key in ("W1", "b1", "W2", "b2"):
+        net.params[key] -= learning_rate * grad[key]
+
+    loss = net.loss(x_batch, t_batch)
+    train_loss_list.append(loss)
+
+    print(f"iteration {i}: loss {loss}")
+
+    if i % iter_per_epoch == 0:
+        train_acc = net.accuracy(x_train, t_train)
+        test_acc = net.accuracy(x_test, t_test)
+        train_acc_list.append(train_acc)
+        test_acc_list.append(test_acc)
+        print(f"train acc, test acc | {train_acc}, {test_acc}")
+
+plt.plot(np.arange(iters_num), train_loss_list)
+plt.show()
+
+```
+
+# 신경망 학습
+
+선형 분리 가능 문제라면 데이터로부터 자동으로 학습할 수 있지만, 비선형 분리 문제는 자동으로 학습할 수 없다. 선형 분리 가능 문제는 유한 번의 학습을 통해 풀 수 있다는 사실이 **퍼셉트론 수렴 정리**(perceptron convergence theorem)으로 증명 됨.
+
+## 데이터 주도 학습
+
+- 전통적인 방식으로서, **사람이 데이터를 확인하고 알고리즘을 개발**하여 결과를 도출한다.
+- **기계학습** 기술 중:
+    - 이미지에서 ‘**특징**(feature)’을 추출하고 그 특징의 패턴을 학습하는 방법
+        - 이미지 특징은 보통 벡터로 기술한다.
+        - CV 분야에서 SIFT, SURF, HOG 등 특징을 많이 사용한다.
+        - 변환된 벡터를 가지고 지도 학습 방식의 대표 분류 기법인 SVM, KNN 등을 통해 학습할 수 있다.
+- **신경망** 방식은 전 과정에서 사람이 개입하지 않는다.
+- **딥러닝**을 **종단간 기계학습**(end-to-end machine learning)이라고도 한다.
+
+회색 블록은 사람이 개입하지 않음을 뜻함
+
+```mermaid
+graph LR
+  1[데이터] --> 2[사람이 생각한 알고리즘]
+  2 --> 3[결과]
+  4[데이터] --> 5["사람이 생각한 특징(SIFT, HOG 등)"]
+  5 --> 6["기계학습(SVN, KNN 등)"]
+  6 --> 7[결과]
+  8[데이터] --> 9["신경망(딥러닝)"]
+  9 --> 10[결과]
+  
+  style 6 fill:#aaaa
+  style 9 fill:#aaaa
+  
+```
+
+기계학습 문제에서의 데이터
+
+- **훈련 데이터**(trainning data)와 **시험 데이터**(test data)가 존재한다.
+- 시험 데이터는 **범용 능력**을 제대로 평가하기 위한 데이터이다.
+- 하나의 데이터셋에만 지나치게 최적화된 상태를 **오버피팅**(overfitting)이라고 한다.
+
+## 손실함수
+
+**손실함수**(loss function)는 신경망 성능의 ‘나쁨’을 나타내는 지표로, 훈련 데이터를 얼마나 잘 처리하지 ‘못’하느냐를 나타냄. 일반적으로는 오차제곱합과 교차 엔트로피 오차를 사용.
+
+**오차제곱합**(sum of squares for error, SSE):
+
+$$
+E=\frac{1}{2}\sum_{k} (y_k-t_k)^2
+$$
+
+- $y_k$: 신경망의 출력
+- $t_k$: 정답 레이블
+- $k$: 데이터의 차원 수
+
+예시(한 원소만 1로 하고, 그 외는 0으로 나타내는 표기법을 **원-핫 인코딩**(one-hot encoding)이라 함):
+
+```bash
+>>> y = [0.1, 0.05, 0.6, 0.0, 0.05, 0.1, 0.0, 0.1, 0.0, 0.0] # 신경망의 출력. 소프트맥스 함수 활용.
+>>> t = [0, 0, 1, 0, 0, 0, 0, 0, 0, 0] # 정답 레이블
+```
+
+구현:
+
+```python
+import numpy as np
+
+def sum_squares_error(y, t):
+    return 0.5 * np.sum((y - t) ** 2)
+
+y = [
+    0.1,
+    0.05,
+    0.6,
+    0.0,
+    0.05,
+    0.1,
+    0.0,
+    0.1,
+    0.0,
+    0.0,
+]  # output of the neural network. Estimated most likely '2'. 
+t = [0, 0, 1, 0, 0, 0, 0, 0, 0, 0]  # answer label
+
+print(sum_squares_error(np.array(y), np.array(t)))  # 0.09750000000000003
+
+```
+
+**교차 엔트로피 오차**(cross entropy error, CEE)
+
+$$
+E=-\sum_{k}t_k\log_e{y_k}
+$$
+
+구현:
+
+```python
+import numpy as np
+
+def cross_entropy_error(y, t):
+    delta = 1e-7
+    return -np.sum(t * np.log(y + delta))
+
+y = [
+    0.1,
+    0.05,
+    0.6,
+    0.0,
+    0.05,
+    0.1,
+    0.0,
+    0.1,
+    0.0,
+    0.0,
+]  # output of the neural network
+t = [0, 0, 1, 0, 0, 0, 0, 0, 0, 0]  # answer label
+
+print(cross_entropy_error(np.array(y), np.array(t)))  # 0.510825457099338
+```
+
+모든 훈련데이터를 대상으로 손실 함수 값을 구하기(**미니배치**(mini-batch)):
+
+- 일반적으로, 모든 데이터를 대상으로 손실 함수의 합을 구하는 것은 많은 시간이 소요된다. 고로 데이터 일부를 추려 전체의 ‘근사치’로 이용한다. 신경망 학습에서도 훈련 데이터로부터 일부만 골라 학습을 수행. 이 일부를 **미니배치**라고 한다.
+- 교차 엔트로피 오차를 활용한 배치 → ‘평균 손실 함수’를 구하는 것
+
+$$
+E=-\frac{1}{N}\sum{n}\sum_{k}t_{nk}\log_e{y_{nk}}
+$$
+
+- $N$: 총 데이터 수
+- $t_{nk}$: $n$번째 데이터의 $k$번째 값
+
+<aside>
+
+신경망을 학습할 떄 정확도를 지표로 삼아서는 안 된다. 정확도를 지표로 하면 매개변수의 미분이 대부분의 장소에서 0이 되기 때문이다.
+
+즉, 정확도를 지표로 한다면, 매개변수 조정을 통해 정확도가 개선이 되지 않는 상황이나, 개선될지라도 정확도가 연속적인 변화를 띄지 않는 경우가 존재한다. 
+
+</aside>
+
+## 수치 미분(numerical differentiation)
+
+- 미분은 ‘특정 순간’의 변화량을 뜻한다.
+- 수치 미분은 아죽 작은 차분으로 미분하는 것.
+- 수식을 전개해 미분하는 것은 ‘해석적(analytic)’이라는 말을 사용.
+
+$$
+\frac{df(x)}{dx} = \lim\nolimits_{h \to 0}{\frac{f(x+h) - f(x)}{h}}
+$$
+
+수치 미분은 컴퓨터에서 구현 시 아래와 같은 이슈가 있을 수 있다.
+
+- **반올림 오차**(rounding error): $1e-50$을 float32형으로 나타내면 0.0이 되어, 올바로 표현 불가. $1e-4$정도에서 좋은 결과를 얻을 수 있음.
+- 근사로 구한 접선이기 때문에 엄밀한 일치가 어려움.
+
+오차를 줄이는 방법:
+
+- $(x+h)$와 $(x-h)$일 때의 함수$f$ 의 차분을 계산하는 방법 → **중심 차분** 혹은 **중앙 차분**
+
+구현:
+
+```python
+def numerical_diff(f, x):
+	h = 1e-4 # 0.0001
+	return (f(x+h) - f(x-h)) / (2*h)
+```
+
+수치 미분 예시:
+
+$$
+y = 0.01x^2+0.1x
+$$
+
+수치미분 구현:
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+def function_1(x):
+    return 0.01 * x**2 + 0.1 * x
+
+def numerical_diff(f, x):
+    h = 1e-4
+    return (f(x + h) - f(x - h)) / (2 * h)
+
+def tangent_line(f, x):
+    d = numerical_diff(f, x)
+    y = f(x) - d * x
+    return lambda t: d * t + y
+
+x = np.arange(0.0, 20.0, 0.1)
+y = function_1(x)
+
+plt.xlabel("x")
+plt.ylabel("f(x)")
+plt.plot(x, y)
+
+plt.scatter(5, function_1(5))
+
+tf = tangent_line(function_1, 5)
+y2 = tf(x)
+plt.plot(x, y2)
+
+plt.show()
+```
+
+## 편미분(partial differentiation)
+
+예시:
+
+$$
+f(x_0, x_1) = x_0^2+x_1^2
+$$
+
+**기울기**(gradient, 편미분을 벡터로 정리한 것) 구하기: 
+
+$$
+(\frac{\partial f}{\partial x_0}, \frac{\partial f}{\partial x_1})
+$$
+
+구현(이해하는데 난이도 있음):
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+def numerical_gradient(f, x):
+    h = 1e-4
+    grad = np.zeros_like(x)  # generate array with same shape as x
+
+    for idx in range(x.size):
+        tmp_val = x[idx]
+        # f(x+h)
+        x[idx] = tmp_val + h
+        fxh1 = f(x)
+
+        # f(x-h)
+        x[idx] = tmp_val - h
+        fxh2 = f(x)
+
+        grad[idx] = (fxh1 - fxh2) / (2 * h)
+        x[idx] = tmp_val  # restore value
+
+    return grad
+
+# input is 1D array with 2 elements
+def function_2(x):
+    # return x[0] ** 2 + x[1] ** 2
+    return np.sum(x**2)
+
+x = np.linspace(-3, 3, 25)
+y = np.linspace(-3, 3, 25)
+X, Y = np.meshgrid(x, y)
+
+Z = np.array(
+    [
+        [function_2(np.array([xi, yi])) for xi, yi in zip(row_x, row_y)]
+        for row_x, row_y in zip(X, Y)
+    ]
+)
+
+grad = np.array(
+    [
+        [
+            numerical_gradient(function_2, np.array([xi, yi]))
+            for xi, yi in zip(row_x, row_y)
+        ]
+        for row_x, row_y in zip(X, Y)
+    ]
+)
+
+print(grad.shape)
+
+# Extract gradient components
+U = grad[:, :, 0]  # Gradient in x direction
+V = grad[:, :, 1]  # Gradient in y direction
+
+print(U.shape, V.shape)
+print(U)
+
+fig = plt.figure()
+ax = fig.add_subplot(111, projection="3d")
+ax.plot_surface(X, Y, Z, cmap="viridis")
+
+plt.show()
+
+fig = plt.figure()
+# Quiver graph
+plt.quiver(X, Y, U, V)
+
+plt.show()
+```
+
+## 경사법(경사 하강법)
+
+매개변수 공간이 광대하여 어디가 최솟값이 되는 곳인지를 짐작하기 어려움. 이런 상황에서 기울기를 이용해 함수의 최솟값을 찾으려하는 것이 **경사법**(gradient method).
+
+- 함수의 극솟값, 최솟값, 또 **안장점**(addle point)이 되는 장소에서는 기울기가 0
+- 안장점은 어느 방향에서 보면 극댓값이고 다른 방향에서 보면 극솟값이 되는 점
+- 경사법은 기울기가 0인 장소를 찾지만 그것이 반드시 최솟값이라고 할 수 없음
+- 복잡하고 찌그러진 모양의 함수라면 평평한 곳으로 파고들면서 **고원**(plateau, 플래토)이라 하는, 학습이 진행되지 않는 정체기에 빠질 수 있음
+
+경사법의 수식 표현:
+
+$$
+x_0 = x_0 - \eta\frac{\partial f}{\partial x_0}
+$$
+
+$$
+x_1 = x_1 - \eta\frac{\partial f}{\partial x_1}
+$$
+
+- $\eta$ 기호(eta, 에타)는 갱신하는 양을 나타 냄.
+- 이를 신경망 학습에서는 **학습률**(learning rate)이라고 함. → 즉 매개변수 값을 얼마나 갱신하느냐를 정하는 것
+- 학습률 값은 특정 값으로 정해두어야 함. 일반적으로 너무 크거나 작으면 ‘좋은 장소’를 찾을 수 없음.
+- 학습률 값을 변경하면서 올바르게 학습하고 있는지를 확인
+
+구현:
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+def function_2(x):
+    # return x[0] ** 2 + x[1] ** 2
+    return np.sum(x**2)
+
+# Consider add type hints for numpy arrays
+# reference: https://stackoverflow.com/questions/71109838/numpy-typing-with-specific-shape-and-datatype
+def numerical_gradient(f, x):
+    h = 1e-4
+    grad = np.zeros_like(x)
+
+    for idx in range(x.size):
+        tmp_val = x[idx]
+
+        x[idx] = tmp_val + h
+        fxh1 = f(x)
+
+        x[idx] = tmp_val - h
+        fxh2 = f(x)
+
+        grad[idx] = (fxh1 - fxh2) / (2 * h)
+        x[idx] = tmp_val
+
+    return grad
+
+def gradient_descent(f, init_x, lr=0.01, step_num=100):
+    """
+    init_x: initial value. 1D array.
+    """
+    x = init_x
+
+    for i in range(step_num):
+        grad = numerical_gradient(f, x)
+        x -= lr * grad
+
+    return x
+
+def gradient_descent_recording(f, init_x, lr=0.01, step_num=100):
+    """
+    init_x: initial value. 1D array.
+    """
+    record = []
+    x = init_x
+
+    for i in range(step_num):
+        grad = numerical_gradient(f, x)
+        x -= lr * grad
+        record.append(x.copy())
+
+    return np.array(record)
+
+init_x = np.array([-3.0, 4.0])
+record = gradient_descent_recording(function_2, init_x, lr=0.1, step_num=100)
+
+fig = plt.figure()
+plt.scatter(record[:, 0], record[:, 1])
+plt.xlim(-3, 3)
+plt.ylim(-4, 4)
+plt.xlabel("X0")
+plt.ylabel("X1")
+plt.show()
+```
+
+학습률 같은 매개변수를 하이퍼파라미터(hyper parameter)라고 함.
+
+- 직접 설정. 여러 후보 값 중에서 시험을 통해 가장 잘 학습하는 값을 찾아야 함
+
+가중치, 편향 같은 신경망의 매개변수와는 성질이 다름.
+
+- 가중치, 편향 → 훈련 데이터와 학습 알고리즘에 의해서 ‘자동’ 획득
+
+## 학습 알고리즘 구현
+
+<aside>
+
+확률적 경사 하강법(stochastic gradient descent, SGD) → 미니배치를 무작위로 선정하기 때문
+
+전제:
+
+- 신경망에 적응 가능한 가중치와 편향이 있음.
+
+1 단계 - 미니배치:
+
+- 훈련 데이터 중 일부를 무작위로 가져 옴.
+
+2 단계 - 기울기 산출:
+
+- 미니배치의 손실 함수 값을 줄이기 위해 각 가중치 매개변수의 기울기를 구함
+
+3 단계 - 매개변수 갱신:
+
+- 가중치 매개변수를 기울기 방향으로 아주 조금 갱신
+
+4 단계 - 반복:
+
+- 1~3단계를 반복
+</aside>
+
+구현:
+
+```python
+from matplotlib import pyplot as plt
+import numpy as np
+import keras
+from keras import utils
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+def softmax(a):
+    c = np.max(a)
+    exp_a = np.exp(a - c)
+    sum_exp_a = np.sum(exp_a)
+    y = exp_a / sum_exp_a
+    return y
+
+def cross_entropy_error(y, t):
+    delta = 1e-7
+    return -np.sum(t * np.log(y + delta))
+
+def numerical_gradient(f, x):
+    h = 1e-4
+    grad = np.zeros_like(x)
+
+    # TODO: Need to test it with a simple function
+    it = np.nditer(x, flags=["multi_index"], op_flags=["readwrite"])
+    while not it.finished:
+        idx = it.multi_index
+        tmp_val = x[idx]
+
+        x[idx] = float(tmp_val) + h
+        fxh1 = f(x)
+
+        x[idx] = tmp_val - h
+        fxh2 = f(x)
+
+        grad[idx] = (fxh1 - fxh2) / (2 * h)
+
+        x[idx] = tmp_val  # restore value
+        it.iternext()
+
+    return grad
+
+def get_data():
+    Mnist = keras.datasets.mnist
+    (x_train, t_train), (x_test, t_test) = Mnist.load_data()
+    # Normalize and one-hot the image data
+    return (
+        x_train.reshape([-1, 28 * 28]) / 255,
+        utils.to_categorical(t_train),
+        x_test.reshape([-1, 28 * 28]) / 255,
+        utils.to_categorical(t_test),
+    )
+
+class two_layer_net:
+    def __init__(self, input_size, hidden_size, output_size, weight_init_std=0.01):
+        self.params = {}
+        self.params["W1"] = weight_init_std * np.random.randn(input_size, hidden_size)
+        self.params["b1"] = np.zeros(hidden_size)
+        self.params["W2"] = weight_init_std * np.random.randn(hidden_size, output_size)
+        self.params["b2"] = np.zeros(output_size)
+
+    def predict(self, x):
+        W1, W2 = self.params["W1"], self.params["W2"]
+        b1, b2 = self.params["b1"], self.params["b2"]
+
+        a1 = np.dot(x, W1) + b1
+        z1 = sigmoid(a1)
+        a2 = np.dot(z1, W2) + b2
+        y = softmax(a2)
+
+        return y
+
+    def loss(self, x, t):
+        y = self.predict(x)
+        return cross_entropy_error(y, t)
+
+    def accuracy(self, x, t):
+        y = self.predict(x)
+        y = np.argmax(y, axis=1)
+        t = np.argmax(t, axis=1)
+
+        accuracy = np.sum(y == t) / float(x.shape[0])
+        return accuracy
+
+    def numerical_gradient(self, x, t):
+        loss_W = lambda W: self.loss(x, t)
+
+        grads = {}
+        grads["W1"] = numerical_gradient(loss_W, self.params["W1"])
+        grads["b1"] = numerical_gradient(loss_W, self.params["b1"])
+        grads["W2"] = numerical_gradient(loss_W, self.params["W2"])
+        grads["b2"] = numerical_gradient(loss_W, self.params["b2"])
+
+        return grads
+
+train_loss_list = []
+train_acc_list = []
+test_acc_list = []
+
+iters_num = 10000
+batch_size = 100
+learning_rate = 0.1
+
+x_train, t_train, x_test, t_test = get_data()
+train_size = x_train.shape[0]
+
+iter_per_epoch = max(train_size / batch_size, 1)
+
+net = two_layer_net(input_size=784, hidden_size=50, output_size=10)
+
+for i in range(iters_num):
+    batch_mask = np.random.choice(train_size, batch_size)
+    x_batch = x_train[batch_mask]
+    t_batch = t_train[batch_mask]
+
+    grad = net.numerical_gradient(x_batch, t_batch)
+
+    for key in ("W1", "b1", "W2", "b2"):
+        net.params[key] -= learning_rate * grad[key]
+
+    loss = net.loss(x_batch, t_batch)
+    train_loss_list.append(loss)
+
+    print(f"iteration {i}: loss {loss}")
+
+    if i % iter_per_epoch == 0:
+        train_acc = net.accuracy(x_train, t_train)
+        test_acc = net.accuracy(x_test, t_test)
+        train_acc_list.append(train_acc)
+        test_acc_list.append(test_acc)
+        print(f"train acc, test acc | {train_acc}, {test_acc}")
+
+plt.plot(np.arange(iters_num), train_loss_list)
+plt.show()
+
+```
